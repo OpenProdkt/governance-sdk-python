@@ -1,0 +1,1 @@
+"""Runnable OpenProdkt decision-point example."""

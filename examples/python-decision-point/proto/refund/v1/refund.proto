@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package openprodkt.example.refund.v1;
+
+// RefundService demonstrates all four gRPC call shapes.
+//
+// Authorization happens once per RPC at establishment. Streams carry no per-message
+// authorization, so only CreateRefund changes state; the streaming methods are read-only.
+service RefundService {
+  rpc CreateRefund(CreateRefundRequest) returns (Refund);
+  rpc WatchRefund(RefundLookup) returns (stream Refund);
+  rpc CountRefunds(stream RefundLookup) returns (RefundCount);
+  rpc WatchRefunds(stream RefundLookup) returns (stream Refund);
+}
+
+message CreateRefundRequest {
+  string refund_id = 1;
+  double amount = 2;
+}
+
+message RefundLookup {
+  string refund_id = 1;
+}
+
+message Refund {
+  string refund_id = 1;
+  double amount = 2;
+  string status = 3;
+  string decision_id = 4;
+  string approval_id = 5;
+  uint32 execution_count = 6;
+}
+
+message RefundCount {
+  uint32 total = 1;
+  uint32 executed = 2;
+}

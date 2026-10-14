@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openprodkt-decision-point-example"
+version = "0.1.0"
+description = "Local OpenProdkt decision-point customer journey"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "openprodkt-governance-sdk[grpc]==0.6.0",
+  "protobuf>=7.35,<8",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+test = [
+  "grpcio-tools>=1.62,<2",
+  "httpx>=0.28,<1",
+  "pytest>=8.4,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["decision_point_app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

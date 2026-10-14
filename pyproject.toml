@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openprodkt-governance-sdk"
+version = "0.6.0"
+description = "Python SDK for OpenProdkt Governance Control Plane"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.32.0"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Documentation = "https://docs.openprodkt.com/"
+Issues = "https://github.com/OpenProdkt/governance-sdk-python/issues"
+Repository = "https://github.com/OpenProdkt/governance-sdk-python"
+
+[project.optional-dependencies]
+fastapi = ["fastapi>=0.115,<1", "httpx>=0.27"]
+grpc = ["grpcio>=1.62,<2"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["openprodkt_governance*"]
+
+[tool.setuptools.package-data]
+openprodkt_governance = ["py.typed"]
