@@ -20,7 +20,7 @@ Run all commands from the repository root unless noted otherwise.
 
 ## Install the app and SDK
 
-The SDK version used by this example is `0.6.0`. Install it from this checkout for local development, then install the example:
+The SDK version used by this example is `0.7.0`. Install it from this checkout for local development, then install the example:
 
 ```bash
 python3 -m venv examples/python-decision-point/.venv
@@ -29,7 +29,7 @@ examples/python-decision-point/.venv/bin/python -m pip install -e 'examples/pyth
 examples/python-decision-point/.venv/bin/python -m pytest examples/python-decision-point/tests
 ```
 
-The `sdk/python` path above is repo-relative and only valid inside this repository. In the public SDK mirror, the example is pinned to the published `openprodkt-governance-sdk[grpc]==0.6.0` release instead.
+The `sdk/python` path above is repo-relative and only valid inside this repository. In the public SDK mirror, the example is pinned to the published `openprodkt-governance-sdk[grpc]==0.7.0` release instead.
 
 The application keeps refund state in memory. Restarting it clears all sample records.
 

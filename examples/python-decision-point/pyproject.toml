@@ -9,7 +9,7 @@ description = "Local OpenProdkt decision-point customer journey"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.116,<1",
-  "openprodkt-governance-sdk[grpc]==0.6.0",
+  "openprodkt-governance-sdk[grpc]==0.7.0",
   "protobuf>=7.35,<8",
   "uvicorn[standard]>=0.35,<1",
 ]

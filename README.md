@@ -27,7 +27,7 @@ The Python client exposes the same current surface as the Go and TypeScript SDKs
 `bootstrap` uses the client's bearer credential and requires an internal admin token with the `org:bootstrap` scope. A tenant API key cannot bootstrap organizations.
 - Governance: `authorize`, `playground_check`, `list_decision_explorer`, `list_audit_events`, `usage`
 - Resources: `list_assets`, `create_asset`, `update_asset`, `delete_asset`, `ingest_asset_discovery`, `list_asset_discoveries`, `delete_asset_discovery`, `list_groups`, `create_group`, `update_group`, `delete_group`, `list_policies`, `create_policy`, `delete_policy`
-- Operations: `list_api_keys`, `create_api_key`, `rotate_api_key`, `revoke_api_key`, `list_approvals`, `approve_approval`, `reject_approval`, `upload_entitlement_artifact`
+- Operations: `list_api_keys`, `create_api_key`, `rotate_api_key`, `revoke_api_key`, `list_approvals`, `reject_approval` (requires a user JWT), `upload_entitlement_artifact`
 
 ## Usage
 

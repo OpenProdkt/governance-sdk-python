@@ -126,6 +126,14 @@ class ApprovalStatusAccessError(EvaluationOutcomeError):
     pass
 
 
+class OperationStatusAccessError(EvaluationOutcomeError):
+    pass
+
+
+class OperationNotFoundError(EvaluationOutcomeError):
+    pass
+
+
 class AssetIdentityConflictError(EvaluationOutcomeError):
     pass
 
@@ -673,11 +681,6 @@ class GovernanceClient:
         response.raise_for_status()
         return response.json()
 
-    def approve_approval(self, approval_id: str, comment: str) -> Dict[str, Any]:
-        response = requests.post(f"{self.base_url}/v1/approvals/{approval_id}/approve", json={"comment": comment}, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
-        response.raise_for_status()
-        return response.json()
-
     def reject_approval(self, approval_id: str, comment: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/v1/approvals/{approval_id}/reject", json={"comment": comment}, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
@@ -701,6 +704,24 @@ class GovernanceClient:
 
     def get_approval_status(self, approval_id: str, *, principal_context: Optional[PrincipalContext] = None) -> Dict[str, Any]:
         return self.get_approval(approval_id, principal_context=principal_context)
+
+    def get_operation_status(self, operation_id: str, *, principal_context: Optional[PrincipalContext] = None) -> Dict[str, Any]:
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", operation_id):
+            raise InvalidAuthorizationInputError("invalid operation_id")
+        bearer_token = self.api_key if principal_context is None else principal_context.bearer_token.strip()
+        if not bearer_token or "\r" in bearer_token or "\n" in bearer_token:
+            raise InvalidAuthorizationInputError("principal bearer_token must be non-empty and header-safe")
+        response = requests.get(f"{self.base_url}/v1/proxy/operations/{quote(operation_id, safe='')}", headers={"Authorization": f"Bearer {bearer_token}"}, timeout=self.timeout_seconds)
+        if response.status_code in (403, 404):
+            body = response.json() if response.content else {}
+            result = DecisionResult("deny", code=body.get("code"), error=body.get("error"), operation_id=operation_id)
+            if response.status_code == 404:
+                raise OperationNotFoundError(404, "operation_not_found", result, response)
+            if body.get("code") == "insufficient_scope":
+                raise OperationStatusAccessError(403, "operation_status_scope_required", result, response)
+            raise AuthorizationDeniedError(403, "authorization_denied", result, response)
+        response.raise_for_status()
+        return response.json()
 
     def wait_for_approval(
         self,

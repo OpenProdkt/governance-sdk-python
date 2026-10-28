@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from openprodkt_governance.asset_identity import AssetIdentity, generate_asset_key
+from openprodkt_governance import OperationStatusAccessError, OperationNotFoundError, AuthorizationDeniedError
 from openprodkt_governance.client import ApprovalStatusAccessError, ApprovalTerminalError, AssetIdentityConflictError, AuditQuery, ClientConfigurationError, DecisionQuery, EvaluationOutcomeError, GovernanceClient, InvalidAuthorizationInputError, PendingApproval, PrincipalContext
 
 
@@ -34,6 +35,36 @@ class AssetKeyConformanceTests(unittest.TestCase):
 
 
 class GovernanceClientTests(unittest.TestCase):
+    @patch("openprodkt_governance.client.requests.get")
+    def test_operation_status_errors_are_typed(self, mock_get: Mock) -> None:
+        client = GovernanceClient("https://api.example.com", "principal")
+        for status, body, exception, outcome in (
+            (403, {"code": "insufficient_scope", "error": "api key scope not permitted"}, OperationStatusAccessError, "operation_status_scope_required"),
+            (403, {"error": "entitlement module not enabled"}, AuthorizationDeniedError, "authorization_denied"),
+            (404, {"code": "operation_not_found", "error": "operation not found"}, OperationNotFoundError, "operation_not_found"),
+        ):
+            with self.subTest(status=status, body=body):
+                response = Mock(status_code=status, content=json.dumps(body).encode())
+                response.json.return_value = body
+                mock_get.return_value = response
+                with self.assertRaises(exception) as raised:
+                    client.get_operation_status("op-1")
+                self.assertEqual(raised.exception.outcome, outcome)
+                self.assertEqual(raised.exception.result.operation_id, "op-1")
+                response.raise_for_status.assert_not_called()
+
+    @patch("openprodkt_governance.client.requests.get")
+    def test_operation_status_preserves_recovery_and_expiry(self, mock_get: Mock) -> None:
+        response = Mock(status_code=200)
+        response.json.return_value = {"operation_id": "op-1", "approval_status": "consumed", "grant_expires_at": "2026-10-18T12:02:00Z", "reason": "execution_unknown", "next_action": "reconcile_upstream", "outcome": {"status": "unknown"}}
+        mock_get.return_value = response
+        client = GovernanceClient("https://api.example.com", "fallback")
+        status = client.get_operation_status("op-1", principal_context=PrincipalContext("principal"))
+        self.assertEqual(status["next_action"], "reconcile_upstream")
+        self.assertEqual(status["outcome"]["status"], "unknown")
+        self.assertEqual(status["grant_expires_at"], "2026-10-18T12:02:00Z")
+        mock_get.assert_called_once_with("https://api.example.com/v1/proxy/operations/op-1", headers={"Authorization": "Bearer principal"}, timeout=5.0)
+
     @patch("openprodkt_governance.client.requests.get")
     def test_approval_status_scope_denial_is_typed(self, mock_get: Mock) -> None:
         response = Mock(status_code=403, content=b'{"code":"insufficient_scope"}')
@@ -557,19 +588,6 @@ class GovernanceClientTests(unittest.TestCase):
         self.assertEqual(result["organizationId"], "org_test")
         _, kwargs = mock_post.call_args
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer internal-admin-token")
-
-    @patch("openprodkt_governance.client.requests.post")
-    def test_approval_comment(self, mock_post: Mock) -> None:
-        response = Mock()
-        response.json.return_value = {"id": "apr_test", "status": "approved", "comment": "ship it"}
-        response.raise_for_status.return_value = None
-        mock_post.return_value = response
-
-        client = GovernanceClient("https://api.example.com", "opk_live_test")
-        result = client.approve_approval("apr_test", "ship it")
-
-        self.assertEqual(result["comment"], "ship it")
-        self.assertEqual(mock_post.call_args.kwargs["json"], {"comment": "ship it"})
 
     @patch("openprodkt_governance.client.requests.get")
     def test_audit_query(self, mock_get: Mock) -> None:

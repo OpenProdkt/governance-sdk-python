@@ -57,9 +57,7 @@ def main() -> None:
             item for item in client.list_approvals(limit=25, status="pending")["approvals"]
             if item["decisionId"] == approval_decision.decision_id
         )
-        resolved = client.approve_approval(approval["id"], "Approved by Python SDK certification")
-        assert resolved["status"] == "approved"
-        assert resolved["comment"] == "Approved by Python SDK certification"
+        assert approval["status"] == "pending"
         assert approval_decision.decision_id in json.dumps(client.list_audit_events(AuditQuery(limit=25))["events"])
         print("Python SDK real API E2E passed")
     finally:
