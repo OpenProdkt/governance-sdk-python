@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from .json_numbers import loads as loads_numbers
+
 
 APPROVAL_WEBHOOK_TYPES = {
     "approval.pending",
@@ -98,7 +100,7 @@ def verify_approval_webhook(
         raise WebhookVerificationError("webhook signature is invalid")
 
     try:
-        body = json.loads(raw_body)
+        body = loads_numbers(raw_body)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise WebhookVerificationError("webhook body is not valid JSON") from error
     if not isinstance(body, dict):

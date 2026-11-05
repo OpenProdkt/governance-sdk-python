@@ -481,7 +481,7 @@ def _grpc_code_for_outcome(outcome: str) -> grpc.StatusCode:
         return grpc.StatusCode.ALREADY_EXISTS
     if outcome == "quota_exceeded":
         return grpc.StatusCode.RESOURCE_EXHAUSTED
-    if outcome == "invalid_request":
+    if outcome in {"invalid_request", "invalid_context"}:
         return grpc.StatusCode.INVALID_ARGUMENT
     if outcome == "configuration_error":
         return grpc.StatusCode.FAILED_PRECONDITION

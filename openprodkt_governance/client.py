@@ -14,6 +14,16 @@ import requests
 
 from .asset_identity import AssetIdentity, generate_asset_key
 from .metadata import sanitize_metadata
+from .json_numbers import READ_JSON_NUMBER_KWARGS as JSON_NUMBER_KWARGS, dumps as dumps_numbers, has_decimal, validate_request_values
+
+
+def _json_request(send: Any, url: str, *, json: Any, **kwargs: Any) -> Any:
+    validate_request_values(json)
+    if not has_decimal(json):
+        return send(url, json=json, **kwargs)
+    headers = dict(kwargs.pop("headers", {}))
+    headers["Content-Type"] = "application/json"
+    return send(url, data=dumps_numbers(json).encode("utf-8"), headers=headers, **kwargs)
 
 
 @dataclass
@@ -290,7 +300,7 @@ class GovernanceClient:
                 payload["metadata"] = sanitize_metadata(metadata)
             except (TypeError, ValueError) as error:
                 raise InvalidAuthorizationInputError(str(error)) from error
-        response = requests.post(
+        response = _json_request(requests.post,
             f"{self.base_url}/v1/evaluate",
             json=payload,
             headers={"Authorization": f"Bearer {bearer_token}"},
@@ -298,7 +308,7 @@ class GovernanceClient:
         )
         if response.status_code not in _EVALUATION_STATUSES:
             raise requests.RequestException(f"unexpected /v1/evaluate HTTP status {response.status_code}", response=response)
-        data = response.json()
+        data = response.json(**JSON_NUMBER_KWARGS)
         if not isinstance(data, dict):
             raise requests.RequestException("invalid JSON body from /v1/evaluate", response=response)
         if response.status_code in {200, 202} and (not isinstance(data.get("decision"), str) or not data["decision"]):
@@ -406,7 +416,7 @@ class GovernanceClient:
         if status_code == 402:
             return QuotaExceededError(status_code, "quota_exceeded", result, response)
         if status_code == 400:
-            return InvalidEvaluationRequestError(status_code, "invalid_request", result, response)
+            return InvalidEvaluationRequestError(status_code, "invalid_context" if code == "invalid_context" else "invalid_request", result, response)
         return PDPUnavailableError(status_code, "pdp_unavailable", result, response)
 
     def _pending_approval(
@@ -448,24 +458,24 @@ class GovernanceClient:
         payload: Dict[str, Any] = {"asset_id": asset_id}
         if metadata:
             payload["metadata"] = sanitize_metadata(metadata)
-        response = requests.post(
+        response = _json_request(requests.post,
             f"{self.base_url}/v1/playground/decision",
             json=payload,
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def request_code(self, email: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/auth/request-code", json={"email": email}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def verify_code(self, email: str, code: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/auth/verify", json={"email": email, "code": code}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def register(self, organization_name: str, email: str) -> Dict[str, Any]:
         response = requests.post(
@@ -474,7 +484,7 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def bootstrap(self, organization_name: str, owner_email: str, tier: str, mode: str) -> Dict[str, Any]:
         response = requests.post(
@@ -484,22 +494,22 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def me(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/me", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def settings(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/settings", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_api_keys(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/api-keys", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def create_api_key(self, name: str, scopes: list[str]) -> Dict[str, Any]:
         response = requests.post(
@@ -509,17 +519,17 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def rotate_api_key(self, key_id: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/v1/api-keys/{key_id}/rotate", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def revoke_api_key(self, key_id: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/v1/api-keys/{key_id}/revoke", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_decision_explorer(self, query: DecisionQuery) -> Dict[str, Any]:
         params: Dict[str, Any] = {"limit": query.limit, "offset": query.offset}
@@ -536,12 +546,12 @@ class GovernanceClient:
                 params[key] = value
         response = requests.get(f"{self.base_url}/v1/decision-explorer", params=params, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_assets(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/assets", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def create_asset(self, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"name": name, "environment": environment, "group": group}
@@ -553,9 +563,9 @@ class GovernanceClient:
             payload["presetVersion"] = preset_version
         if owner_user_id is not None:
             payload["ownerUserId"] = owner_user_id
-        response = requests.post(f"{self.base_url}/v1/assets", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
+        response = _json_request(requests.post, f"{self.base_url}/v1/assets", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def update_asset(self, asset_id: str, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"name": name, "environment": environment, "group": group}
@@ -567,37 +577,37 @@ class GovernanceClient:
             payload["presetVersion"] = preset_version
         if owner_user_id is not None:
             payload["ownerUserId"] = owner_user_id
-        response = requests.patch(f"{self.base_url}/v1/assets/{asset_id}", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
+        response = _json_request(requests.patch, f"{self.base_url}/v1/assets/{asset_id}", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def delete_asset(self, asset_id: str) -> Dict[str, Any]:
         response = requests.delete(f"{self.base_url}/v1/assets/{asset_id}", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def ingest_asset_discovery(self, discovery: Dict[str, Any]) -> Dict[str, Any]:
         payload = dict(discovery)
         if "metadata" in payload:
             payload["metadata"] = sanitize_metadata(payload["metadata"])
-        response = requests.post(f"{self.base_url}/v1/asset-discoveries", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
+        response = _json_request(requests.post, f"{self.base_url}/v1/asset-discoveries", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_asset_discoveries(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/asset-discoveries", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def delete_asset_discovery(self, discovery_id: str) -> Dict[str, Any]:
         response = requests.delete(f"{self.base_url}/v1/asset-discoveries/{discovery_id}", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_groups(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/groups", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def create_group(self, name: str, approvers: str) -> Dict[str, Any]:
         response = requests.post(
@@ -607,7 +617,7 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def update_group(self, group_id: str, approvers: str) -> Dict[str, Any]:
         response = requests.patch(
@@ -617,32 +627,38 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def delete_group(self, group_id: str) -> Dict[str, Any]:
         response = requests.delete(f"{self.base_url}/v1/groups/{group_id}", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_policies(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/policies", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
-    def create_policy(self, asset_id: str, name: str, condition: Dict[str, Any], decision: str) -> Dict[str, Any]:
-        response = requests.post(
+    def create_policy(self, asset_id: str, name: str, condition: Dict[str, Any], decision: str, *, status: Optional[str] = None) -> Dict[str, Any]:
+        """Create published/active by default; explicitly request status='draft' for an inactive draft."""
+        body = {"assetId": asset_id, "name": name, "condition": condition, "decision": decision}
+        if status is not None:
+            if status not in ("draft", "published"):
+                raise ValueError("policy creation status must be draft or published")
+            body["status"] = status
+        response = _json_request(requests.post,
             f"{self.base_url}/v1/policies",
-            json={"assetId": asset_id, "name": name, "condition": condition, "decision": decision},
+            json=body,
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def delete_policy(self, policy_id: str) -> Dict[str, Any]:
         response = requests.delete(f"{self.base_url}/v1/policies/{policy_id}", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def set_policy_active(self, policy_id: str, is_active: bool) -> Dict[str, Any]:
         response = requests.patch(
@@ -652,7 +668,7 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_policy_revisions(self, policy_id: str) -> Dict[str, Any]:
         response = requests.get(
@@ -661,7 +677,7 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def rollback_policy(self, policy_id: str, revision_id: str) -> Dict[str, Any]:
         response = requests.post(
@@ -671,7 +687,7 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def list_approvals(self, *, limit: int, offset: int = 0, status: Optional[str] = None) -> Dict[str, Any]:
         params: Dict[str, Any] = {"limit": limit, "offset": offset}
@@ -679,12 +695,12 @@ class GovernanceClient:
             params["status"] = status
         response = requests.get(f"{self.base_url}/v1/approvals", params=params, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def reject_approval(self, approval_id: str, comment: str) -> Dict[str, Any]:
         response = requests.post(f"{self.base_url}/v1/approvals/{approval_id}/reject", json={"comment": comment}, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def get_approval(self, approval_id: str, *, principal_context: Optional[PrincipalContext] = None) -> Dict[str, Any]:
         bearer_token = self.api_key if principal_context is None else principal_context.bearer_token.strip()
@@ -692,7 +708,7 @@ class GovernanceClient:
             raise ValueError("principal bearer_token must be non-empty and header-safe")
         response = requests.get(f"{self.base_url}/v1/approvals/{approval_id}", headers={"Authorization": f"Bearer {bearer_token}"}, timeout=self.timeout_seconds)
         if response.status_code == 403:
-            body = response.json() if response.content else {}
+            body = response.json(**JSON_NUMBER_KWARGS) if response.content else {}
             result = DecisionResult("deny", code=body.get("code"), error=body.get("error"))
             if body.get("code") == "insufficient_scope":
                 raise ApprovalStatusAccessError(403, "approval_status_scope_required", result, response)
@@ -700,7 +716,7 @@ class GovernanceClient:
         if response.status_code == 404:
             raise ApprovalNotFoundError(404, "approval_not_found", DecisionResult("deny"), response)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def get_approval_status(self, approval_id: str, *, principal_context: Optional[PrincipalContext] = None) -> Dict[str, Any]:
         return self.get_approval(approval_id, principal_context=principal_context)
@@ -713,7 +729,7 @@ class GovernanceClient:
             raise InvalidAuthorizationInputError("principal bearer_token must be non-empty and header-safe")
         response = requests.get(f"{self.base_url}/v1/proxy/operations/{quote(operation_id, safe='')}", headers={"Authorization": f"Bearer {bearer_token}"}, timeout=self.timeout_seconds)
         if response.status_code in (403, 404):
-            body = response.json() if response.content else {}
+            body = response.json(**JSON_NUMBER_KWARGS) if response.content else {}
             result = DecisionResult("deny", code=body.get("code"), error=body.get("error"), operation_id=operation_id)
             if response.status_code == 404:
                 raise OperationNotFoundError(404, "operation_not_found", result, response)
@@ -721,7 +737,7 @@ class GovernanceClient:
                 raise OperationStatusAccessError(403, "operation_status_scope_required", result, response)
             raise AuthorizationDeniedError(403, "authorization_denied", result, response)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def wait_for_approval(
         self,
@@ -854,12 +870,12 @@ class GovernanceClient:
                 params[key] = value
         response = requests.get(f"{self.base_url}/v1/audit", params=params, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def usage(self) -> Dict[str, Any]:
         response = requests.get(f"{self.base_url}/v1/usage", headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)
 
     def upload_entitlement_artifact(self, content: bytes, filename: str = "license.json") -> Dict[str, Any]:
         response = requests.post(
@@ -869,4 +885,4 @@ class GovernanceClient:
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json(**JSON_NUMBER_KWARGS)

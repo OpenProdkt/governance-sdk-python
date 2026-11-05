@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
-from math import isfinite
+from decimal import Decimal
 from typing import Any, Dict
+
+from .json_numbers import dumps, validate_number
 
 try:
     from pydantic import BaseModel as _PydanticBaseModel
@@ -109,21 +110,23 @@ def sanitize_metadata(metadata: Any) -> Dict[str, Any]:
         else:
             output[k] = _sanitize_value(value)
 
-    encoded = json.dumps(output, allow_nan=False).encode("utf-8")
+    encoded = dumps(output).encode("utf-8")
     if len(encoded) > MAX_METADATA_BYTES:
         raise ValueError(f"metadata exceeds {MAX_METADATA_BYTES} bytes")
 
     return output
 
 
-def _to_json_compatible(value: Any, ancestors: set[int] | None = None) -> Any:
+def _to_json_compatible(value: Any, ancestors: set[int] | None = None, depth: int = 0) -> Any:
+    if depth > 64:
+        raise ValueError("metadata nesting exceeds 64 levels")
     if ancestors is None:
         ancestors = set()
     if is_dataclass(value) and not isinstance(value, type):
         identity = _enter_container(value, ancestors)
         try:
             return {
-                field.name: _to_json_compatible(getattr(value, field.name), ancestors)
+                field.name: _to_json_compatible(getattr(value, field.name), ancestors, depth + 1)
                 for field in fields(value)
             }
         finally:
@@ -131,7 +134,7 @@ def _to_json_compatible(value: Any, ancestors: set[int] | None = None) -> Any:
     if _PydanticBaseModel and isinstance(value, _PydanticBaseModel):
         identity = _enter_container(value, ancestors)
         try:
-            return _to_json_compatible(value.model_dump(mode="json"), ancestors)
+            return _to_json_compatible(value.model_dump(mode="json"), ancestors, depth)
         except Exception as error:
             raise ValueError("Pydantic metadata could not be serialized in JSON mode") from error
         finally:
@@ -143,21 +146,20 @@ def _to_json_compatible(value: Any, ancestors: set[int] | None = None) -> Any:
             for key, nested in value.items():
                 if not isinstance(key, str):
                     raise TypeError("metadata mapping keys must be strings")
-                output[key] = _to_json_compatible(nested, ancestors)
+                output[key] = _to_json_compatible(nested, ancestors, depth + 1)
             return output
         finally:
             ancestors.remove(identity)
     if isinstance(value, (list, tuple)):
         identity = _enter_container(value, ancestors)
         try:
-            return [_to_json_compatible(item, ancestors) for item in value]
+            return [_to_json_compatible(item, ancestors, depth + 1) for item in value]
         finally:
             ancestors.remove(identity)
-    if value is None or isinstance(value, (bool, str, int)):
+    if value is None or isinstance(value, (bool, str)):
         return value
-    if isinstance(value, float):
-        if not isfinite(value):
-            raise ValueError("metadata numbers must be finite")
+    if isinstance(value, (int, float, Decimal)):
+        validate_number(value)
         return value
     raise TypeError(f"metadata value type {type(value).__name__} is not supported")
 
@@ -180,9 +182,15 @@ def _sanitize_ai(values: Dict[str, Any]) -> Dict[str, int]:
             raise ValueError(f"metadata.ai key '{k}' is forbidden")
         if k not in ALLOWED_AI_KEYS:
             raise ValueError(f"metadata.ai key '{k}' is not allowed")
-        if not isinstance(value, (int, float)):
-            raise ValueError(f"metadata.ai.{k} must be numeric")
-        number = int(value)
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            raise ValueError(f"metadata.ai.{k} must be an integer")
+        # Match the JSON decimal a native float would send, not an intermediate
+        # binary-float-to-int conversion above 2^53.
+        decimal = value if isinstance(value, Decimal) else Decimal(str(value))
+        validate_number(decimal)
+        number = int(decimal)
+        if number != decimal or not -(2**63) <= number < 2**63:
+            raise ValueError(f"metadata.ai.{k} must be a signed 64-bit integer")
         if k == "attachment_count" and number > MAX_ATTACHMENT_COUNT:
             raise ValueError(f"metadata.ai.attachment_count exceeds {MAX_ATTACHMENT_COUNT}")
         output[k] = number
@@ -190,7 +198,7 @@ def _sanitize_ai(values: Dict[str, Any]) -> Dict[str, int]:
 
 
 def _sanitize_value(value: Any) -> Any:
-    if value is None or isinstance(value, (bool, str, int, float)):
+    if value is None or isinstance(value, (bool, str, int, float, Decimal)):
         return value
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]

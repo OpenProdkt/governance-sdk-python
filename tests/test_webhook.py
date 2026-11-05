@@ -5,6 +5,7 @@ import hmac
 import json
 import unittest
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from openprodkt_governance.webhook import (
@@ -18,6 +19,15 @@ from openprodkt_governance.webhook import (
 class ApprovalWebhookTests(unittest.TestCase):
     secret = "whsec_test"
     timestamp = "2026-10-04T12:00:00Z"
+
+    def test_signed_metadata_preserves_exact_decimals(self) -> None:
+        body = b'{"eventId":"obx_1","eventType":"approval.approved","organizationId":"org_1","aggregateId":"apr_1","data":{"approvalId":"apr_1","n":9007199254740993,"d":0.1000000000000000000001}}'
+        signature = hmac.new(self.secret.encode(), self.timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+        headers = {"X-OpenProdkt-Event-Id": "obx_1", "X-OpenProdkt-Timestamp": self.timestamp, "X-OpenProdkt-Signature": f"v1=sha256={signature}"}
+        event = verify_approval_webhook(body, headers, self.secret, now=datetime(2026, 10, 4, 12, tzinfo=timezone.utc))
+        self.assertEqual(event.data["n"], 9007199254740993)
+        self.assertEqual(event.data["d"], Decimal("0.1000000000000000000001"))
+        self.assertIsInstance(event.data["d"], Decimal)
 
     def test_shared_webhook_conformance_vector(self) -> None:
         fixture_path = Path(__file__).resolve().parents[2] / "testdata" / "pep-conformance.json"
