@@ -4,13 +4,22 @@ import time
 import random
 import threading
 import math
+import inspect
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable, TypeVar, Literal
 from urllib.parse import quote
 
 import requests
+
+from .correlation import (EvaluateRequest, OperationOutcomeRequest, OperationOutcomeResponse, DefinitionObservation,
+                          valid_traceparent, validate_outcome_correlation, validate_evaluation_transport,
+                          validate_definition_observation, validate_vault_members)
+from .guard import GuardOptions, GuardResult, GuardVault, VaultWriteError
+from .vault_evidence import write_vault_record
+
+_GuardT = TypeVar("_GuardT")
 
 from .asset_identity import AssetIdentity, generate_asset_key
 from .metadata import sanitize_metadata
@@ -79,6 +88,15 @@ class DecisionResult:
     code: Optional[str] = None
     error: Optional[str] = None
 
+    @property
+    def traceparent(self) -> Optional[str]:
+        """HTTP response context, excluded from dataclass/JSON field serialization."""
+        return getattr(self, "_traceparent", None)
+
+    @traceparent.setter
+    def traceparent(self, value: Optional[str]) -> None:
+        self._traceparent = value
+
 
 class EvaluationOutcomeError(requests.HTTPError):
     def __init__(self, status_code: int, outcome: str, result: DecisionResult, response: requests.Response) -> None:
@@ -120,6 +138,14 @@ class PendingApproval(EvaluationOutcomeError):
 
 class ApprovalTerminalError(EvaluationOutcomeError):
     pass
+
+
+class OperationOutcomeRejectedError(requests.HTTPError):
+    """Definitive 4xx refusal (excluding 408/429); do not retry this report."""
+
+    def __init__(self, response: requests.Response) -> None:
+        super().__init__(f"operation outcome rejected with status {response.status_code}", response=response)
+        self.status_code = response.status_code
 
 
 class ApprovalWaitCancelledError(InterruptedError):
@@ -247,6 +273,8 @@ class GovernanceClient:
         jitter_fraction: float = 0.1,
         cancel_event: Optional[threading.Event] = None,
         principal_context: Optional[PrincipalContext] = None,
+        traceparent: Optional[str] = None,
+        definition_observation: Optional[DefinitionObservation] = None,
     ) -> DecisionResult:
         if wait_for_approval_seconds is not None and (
             not math.isfinite(wait_for_approval_seconds) or wait_for_approval_seconds < 0 or wait_for_approval_seconds > 30
@@ -300,10 +328,202 @@ class GovernanceClient:
                 payload["metadata"] = sanitize_metadata(metadata)
             except (TypeError, ValueError) as error:
                 raise InvalidAuthorizationInputError(str(error)) from error
+        if definition_observation is not None:
+            payload["definition_observation"] = definition_observation
+        try:
+            return self._evaluate(payload, bearer_token, traceparent, asset_identity=asset_identity)
+        except PendingApproval as pending:
+            if not wait_for_approval_seconds:
+                raise
+            return self._wait_for_decision_approval(
+                pending.result, pending.response, wait_for_approval_seconds,
+                operation_id=operation_id.strip(), asset_id=asset_id, asset_key=asset_key,
+                asset_identity=asset_identity, metadata=metadata, transport=transport,
+                principal_context=principal_context, traceparent=traceparent,
+                definition_observation=definition_observation,
+                poll_interval_seconds=poll_interval_seconds,
+                max_poll_interval_seconds=max_poll_interval_seconds,
+                backoff_multiplier=backoff_multiplier, jitter_fraction=jitter_fraction,
+                cancel_event=cancel_event,
+            )
+
+    def evaluate_proxy(
+        self, request: EvaluateRequest, *, principal_context: PrincipalContext,
+        traceparent: Optional[str] = None,
+    ) -> DecisionResult:
+        """PEP-only canonical evaluation. Never falls back to the client API key."""
+        bearer_token = self._required_principal(principal_context)
+        if not request.get("operation_id", "").strip():
+            raise InvalidAuthorizationInputError("operation_id is required")
+        payload = {key: value for key, value in request.items() if key in {
+            "version", "asset", "operation_id", "approval_id", "payload_hash", "transport", "metadata",
+            "definition_observation"} and not (key == "definition_observation" and value is None)}
+        try:
+            payload.update(validate_vault_members(request, "input"))
+        except ValueError as error:
+            raise InvalidAuthorizationInputError(str(error)) from error
+        if "metadata" in payload:
+            payload["metadata"] = sanitize_metadata(payload["metadata"])
+        return self._evaluate(payload, bearer_token, traceparent, path="/v1/proxy/evaluate")
+
+    @staticmethod
+    def _required_principal(principal_context: PrincipalContext) -> str:
+        if principal_context is None:
+            raise InvalidAuthorizationInputError("principal context is required")
+        token = principal_context.bearer_token.strip()
+        if not token or "\r" in token or "\n" in token:
+            raise InvalidAuthorizationInputError("principal bearer_token must be non-empty and header-safe")
+        return token
+
+    def guard(
+        self, request: EvaluateRequest, callback: Callable[[], _GuardT], *,
+        principal_context: PrincipalContext, options: Optional[GuardOptions] = None,
+        vault: Optional[GuardVault] = None,
+    ) -> GuardResult[_GuardT]:
+        """Evaluate once, execute once on ALLOW. Report errors never mask completion.
+
+        Callback exceptions are reported unknown and re-raised unchanged. Results
+        and exception text are never sent. No automatic retries or approval polling.
+
+        With ``vault``, the input record you supply is written before evaluation and the
+        record your ``output`` function returns is written after the callback; see
+        GuardVault. Without it nothing changes.
+        """
+        reporter = PrincipalContext(self._required_principal(principal_context))
+        if not callable(callback) or inspect.iscoroutinefunction(callback):
+            raise InvalidAuthorizationInputError("a synchronous callback is required")
+        supplied: GuardOptions = options.copy() if options is not None else {}
+        report: OperationOutcomeRequest = {
+            "operation_id": request["operation_id"], "status": "unknown", "completed_at": "",
+        }
+        if "execution_id" in supplied:
+            report["execution_id"] = supplied["execution_id"]
+        if "attempt" in supplied:
+            report["attempt"] = supplied["attempt"]
+        if "upstream_request_id" in supplied:
+            report["upstream_request_id"] = supplied["upstream_request_id"]
+        try:
+            validate_outcome_correlation(report)
+        except ValueError as error:
+            raise InvalidAuthorizationInputError(str(error)) from error
+        if vault is not None:
+            request = self._with_input_evidence(request, vault)
+        decision = self.evaluate_proxy(request, principal_context=reporter, traceparent=supplied.get("traceparent"))
+        if decision.decision != "allow" or (decision.operation_id and decision.operation_id != request["operation_id"]):
+            raise InvalidAuthorizationInputError("guard requires matching ALLOW")
+        def deliver(status: Literal["succeeded", "unknown"]) -> Optional[BaseException]:
+            report["status"] = status
+            report["completed_at"] = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+            try:
+                self.report_operation_outcome(report, principal_context=reporter)
+            except BaseException as error:
+                return error
+            return None
+        try:
+            value = callback()
+            if inspect.isawaitable(value):
+                if inspect.iscoroutine(value):
+                    value.close()
+                raise InvalidAuthorizationInputError("guard requires a completed synchronous callback")
+        except BaseException:
+            deliver("unknown")
+            raise
+        if vault is not None:
+            self._add_output_evidence(report, vault, value)
+        reporting_error = deliver("succeeded")
+        return GuardResult(value, report.copy(), reporting_error)
+
+    @staticmethod
+    def _vault_settings(vault: GuardVault) -> Any:
+        writer = vault.get("writer") if isinstance(vault, dict) else None
+        organization_id = vault.get("organization_id") if isinstance(vault, dict) else None
+        if (not callable(getattr(writer, "write", None)) or not isinstance(organization_id, str)
+                or not organization_id or "input" not in vault or vault["input"] is None
+                or not isinstance(vault.get("continue_without_vault", False), bool)
+                or ("output" in vault and vault["output"] is not None and not callable(vault["output"]))):
+            raise InvalidAuthorizationInputError("vault requires a writer, an organization_id and an input record")
+        return writer, organization_id
+
+    def _with_input_evidence(self, request: EvaluateRequest, vault: GuardVault) -> EvaluateRequest:
+        writer, organization_id = self._vault_settings(vault)
+        if request.get("vault_ref") is not None or request.get("vault_gap") is not None:
+            raise InvalidAuthorizationInputError("vault_ref and vault_gap are set by the vault option")
+        if not request.get("operation_id", "").strip():
+            raise InvalidAuthorizationInputError("operation_id is required")
+        # Validate what evaluation would validate before anything is written, so a request
+        # that is refused later leaves no stored record behind.
+        try:
+            validate_evaluation_transport(request.get("transport", {}))
+            if request.get("definition_observation") is not None:
+                validate_definition_observation(request["definition_observation"])
+        except ValueError as error:
+            raise InvalidAuthorizationInputError(str(error)) from error
+        ref, reason = write_vault_record(writer, "input", organization_id, request["operation_id"], vault["input"])
+        evidence: Dict[str, Any]
+        if ref is not None:
+            evidence = {"vault_ref": ref}
+        elif vault.get("continue_without_vault", False):
+            evidence = {"vault_gap": {"reason": reason}}
+        else:
+            raise VaultWriteError(reason or "write_failed")
+        return {**request, **evidence}  # type: ignore[return-value]
+
+    @staticmethod
+    def _add_output_evidence(report: OperationOutcomeRequest, vault: GuardVault, value: Any) -> None:
+        output = vault.get("output")
+        if output is None:
+            return
+        writer, organization_id = vault["writer"], vault["organization_id"]
+        try:
+            record = output(value)
+        except Exception:  # the call already ran; the failure is only a gap
+            report["vault_gap"] = {"reason": "write_failed"}
+            return
+        if record is None:
+            return
+        ref, reason = write_vault_record(writer, "output", organization_id, report["operation_id"], record)
+        if ref is not None:
+            report["vault_ref"] = ref
+        else:
+            report["vault_gap"] = {"reason": reason or "write_failed"}
+
+    def report_operation_outcome(
+        self, request: OperationOutcomeRequest, *, principal_context: PrincipalContext,
+    ) -> OperationOutcomeResponse:
+        """Report once; transient failures may retry the identical tuple, never re-execute."""
+        token = self._required_principal(principal_context)
+        try:
+            validate_outcome_correlation(request)
+            vault_members = validate_vault_members(request, "output")
+        except ValueError as error:
+            raise InvalidAuthorizationInputError(str(error)) from error
+        payload = {key: value for key, value in request.items() if key in {
+            "operation_id", "status", "completed_at", "result_hash", "execution_id", "attempt", "upstream_request_id"}}
+        payload.update(vault_members)
+        response = _json_request(requests.post, f"{self.base_url}/v1/proxy/outcomes", json=payload,
+                                 headers={"Authorization": f"Bearer {token}"}, timeout=self.timeout_seconds)
+        if 400 <= response.status_code < 500 and response.status_code not in {408, 429}:
+            raise OperationOutcomeRejectedError(response)
+        response.raise_for_status()
+        return response.json(**JSON_NUMBER_KWARGS)
+
+    def _evaluate(
+        self, payload: Dict[str, Any], bearer_token: str, traceparent: Optional[str], *,
+        path: str = "/v1/evaluate", asset_identity: Optional[AssetIdentity] = None,
+    ) -> DecisionResult:
+        try:
+            validate_evaluation_transport(payload.get("transport", {}))
+            if "definition_observation" in payload:
+                payload["definition_observation"] = validate_definition_observation(payload["definition_observation"])
+        except ValueError as error:
+            raise InvalidAuthorizationInputError(str(error)) from error
+        headers = {"Authorization": f"Bearer {bearer_token}"}
+        if valid_traceparent(traceparent):
+            headers["traceparent"] = traceparent
         response = _json_request(requests.post,
-            f"{self.base_url}/v1/evaluate",
+            f"{self.base_url}{path}",
             json=payload,
-            headers={"Authorization": f"Bearer {bearer_token}"},
+            headers=headers,
             timeout=self.timeout_seconds,
         )
         if response.status_code not in _EVALUATION_STATUSES:
@@ -330,62 +550,24 @@ class GovernanceClient:
             code=data.get("code"),
             error=data.get("error"),
         )
+        header_traceparent = response.headers.get("traceparent")
+        result.traceparent = header_traceparent if isinstance(header_traceparent, str) else None
         expected_decision = {200: "allow", 202: "approval_required"}.get(response.status_code)
         if expected_decision is not None and result.decision != expected_decision:
             raise requests.RequestException(
                 f"/v1/evaluate status {response.status_code} conflicts with decision {result.decision!r}",
                 response=response,
             )
-        if response.status_code == 200 and approval_id and result.approval_status != "consumed":
+        if response.status_code == 200 and payload.get("approval_id") and result.approval_status != "consumed":
             raise requests.RequestException("approved retry was not confirmed consumed by /v1/evaluate", response=response)
         if response.status_code == 202:
-            pending = self._pending_approval(
-                result,
-                response,
-                operation_id=operation_id.strip(),
-                asset_id=asset_id,
-                asset_key=asset_key,
+            raise self._pending_approval(
+                result, response, operation_id=payload["operation_id"],
+                asset_id=payload["asset"].get("id"), asset_key=payload["asset"].get("key"),
                 asset_identity=asset_identity,
             )
-            if wait_for_approval_seconds:
-                return self._wait_for_decision_approval(
-                    pending.result,
-                    response,
-                    wait_for_approval_seconds,
-                    operation_id=operation_id.strip(),
-                    asset_id=asset_id,
-                    asset_key=asset_key,
-                    asset_identity=asset_identity,
-                    metadata=metadata,
-                    transport=transport,
-                    principal_context=principal_context,
-                    poll_interval_seconds=poll_interval_seconds,
-                    max_poll_interval_seconds=max_poll_interval_seconds,
-                    backoff_multiplier=backoff_multiplier,
-                    jitter_fraction=jitter_fraction,
-                    cancel_event=cancel_event,
-                )
-            raise pending
         if response.status_code in _EVALUATION_OUTCOMES:
             raise self._evaluation_error(response.status_code, result, response)
-        if result.decision == "approval_required":
-            return self._wait_for_decision_approval(
-                result,
-                response,
-                wait_for_approval_seconds,
-                operation_id=operation_id.strip(),
-                asset_id=asset_id,
-                asset_key=asset_key,
-                asset_identity=asset_identity,
-                metadata=metadata,
-                transport=transport,
-                principal_context=principal_context,
-                poll_interval_seconds=poll_interval_seconds,
-                max_poll_interval_seconds=max_poll_interval_seconds,
-                backoff_multiplier=backoff_multiplier,
-                jitter_fraction=jitter_fraction,
-                cancel_event=cancel_event,
-            )
         return result
 
     def _evaluation_error(self, status_code: int, result: DecisionResult, response: requests.Response) -> EvaluationOutcomeError:
@@ -553,7 +735,7 @@ class GovernanceClient:
         response.raise_for_status()
         return response.json(**JSON_NUMBER_KWARGS)
 
-    def create_asset(self, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_asset(self, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None, ai_inventory: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"name": name, "environment": environment, "group": group}
         if definition is not None:
             payload["definition"] = definition
@@ -563,11 +745,13 @@ class GovernanceClient:
             payload["presetVersion"] = preset_version
         if owner_user_id is not None:
             payload["ownerUserId"] = owner_user_id
+        if ai_inventory is not None:
+            payload["ai_inventory"] = ai_inventory
         response = _json_request(requests.post, f"{self.base_url}/v1/assets", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
         return response.json(**JSON_NUMBER_KWARGS)
 
-    def update_asset(self, asset_id: str, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
+    def update_asset(self, asset_id: str, name: str, environment: str, group: str, definition: Optional[Dict[str, Any]] = None, preset_id: Optional[str] = None, preset_version: Optional[str] = None, owner_user_id: Optional[str] = None, ai_inventory: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"name": name, "environment": environment, "group": group}
         if definition is not None:
             payload["definition"] = definition
@@ -577,6 +761,8 @@ class GovernanceClient:
             payload["presetVersion"] = preset_version
         if owner_user_id is not None:
             payload["ownerUserId"] = owner_user_id
+        if ai_inventory is not None:
+            payload["ai_inventory"] = ai_inventory
         response = _json_request(requests.patch, f"{self.base_url}/v1/assets/{asset_id}", json=payload, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=self.timeout_seconds)
         response.raise_for_status()
         return response.json(**JSON_NUMBER_KWARGS)
@@ -802,6 +988,8 @@ class GovernanceClient:
         backoff_multiplier: float,
         jitter_fraction: float,
         cancel_event: Optional[threading.Event],
+        traceparent: Optional[str] = None,
+        definition_observation: Optional[DefinitionObservation] = None,
     ) -> DecisionResult:
         approval_id = result.approval_id
         if not approval_id or not result.payload_hash:
@@ -841,6 +1029,8 @@ class GovernanceClient:
                 metadata=metadata,
                 transport=transport,
                 principal_context=principal_context,
+                traceparent=traceparent,
+                definition_observation=definition_observation,
             )
         if status == "rejected":
             raise ApprovalTerminalError(403, "approval_rejected", result, response)

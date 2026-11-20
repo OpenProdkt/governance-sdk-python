@@ -1,0 +1,41 @@
+{
+  "profile": "opk.phase2-inventory/1",
+  "valid": [
+    {},
+    {
+      "intended_purpose": "Customer-supplied bounded purpose",
+      "risk_tier": "high",
+      "high_risk_category": "category-1",
+      "impact_assessment_ref": "urn:opk:assessment:123",
+      "fundamental_rights_impact_assessment_ref": "urn:opk:fria:123",
+      "model_card_ref": "urn:opk:card:123"
+    }
+  ],
+  "invalid": [
+    null,
+    {
+      "risk_tier": "automatic"
+    },
+    {
+      "intended_purpose": null
+    },
+    {
+      "intended_purpose": ""
+    },
+    {
+      "model_card_ref": "https://example.test/private"
+    },
+    {
+      "accountable_owner": "person@example.test"
+    },
+    {
+      "unknown": "raw-secret"
+    },
+    {
+      "high_risk_category": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "intended_purpose": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  ]
+}

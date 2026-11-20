@@ -1,0 +1,131 @@
+{
+  "profile": "opk.phase4-guard/1",
+  "tuple": {
+    "execution_id": "019a5e83-5840-7c10-8db0-130543aac502",
+    "attempt": 1,
+    "upstream_request_id": "guard-request"
+  },
+  "cases": [
+    {
+      "name": "allow-success",
+      "evaluate_status": 200,
+      "evaluate_body": {
+        "operation_id": "guard-op",
+        "decision": "allow"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 1,
+      "outcome": "succeeded"
+    },
+    {
+      "name": "callback-ambiguous",
+      "evaluate_status": 200,
+      "evaluate_body": {
+        "operation_id": "guard-op",
+        "decision": "allow"
+      },
+      "callback_error": true,
+      "report_status": 201,
+      "calls": 1,
+      "outcome": "unknown"
+    },
+    {
+      "name": "report-outage-never-reexecute",
+      "evaluate_status": 200,
+      "evaluate_body": {
+        "operation_id": "guard-op",
+        "decision": "allow"
+      },
+      "callback_error": false,
+      "report_status": 503,
+      "calls": 1,
+      "outcome": "succeeded"
+    },
+    {
+      "name": "callback-and-report-error",
+      "evaluate_status": 200,
+      "evaluate_body": {
+        "operation_id": "guard-op",
+        "decision": "allow"
+      },
+      "callback_error": true,
+      "report_status": 503,
+      "calls": 1,
+      "outcome": "unknown"
+    },
+    {
+      "name": "deny",
+      "evaluate_status": 403,
+      "evaluate_body": {
+        "decision": "deny",
+        "reason": "policy_denied"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    },
+    {
+      "name": "approval-required",
+      "evaluate_status": 202,
+      "evaluate_body": {
+        "decision": "approval_required",
+        "operation_id": "guard-op",
+        "approvalId": "apr",
+        "payload_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approval_expires_at": "2099-01-01T00:00:00Z"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    },
+    {
+      "name": "consumed-never-replay",
+      "evaluate_status": 409,
+      "evaluate_body": {
+        "decision": "deny",
+        "reason": "approval_consumed",
+        "code": "approval_consumed"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    },
+    {
+      "name": "pdp-outage",
+      "evaluate_status": 503,
+      "evaluate_body": {
+        "decision": "deny",
+        "reason": "pdp_unavailable"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    },
+    {
+      "name": "malformed-allow",
+      "evaluate_status": 200,
+      "evaluate_body": {},
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    },
+    {
+      "name": "mismatched-operation",
+      "evaluate_status": 200,
+      "evaluate_body": {
+        "decision": "allow",
+        "operation_id": "another"
+      },
+      "callback_error": false,
+      "report_status": 201,
+      "calls": 0,
+      "outcome": ""
+    }
+  ]
+}

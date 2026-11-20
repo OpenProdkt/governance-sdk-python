@@ -1,3 +1,6 @@
+from .guard import GuardOptions, GuardResult, GuardVault, VaultWriteError
+from .correlation import (EvaluateAsset, EvaluateRequest, DefinitionObservation, PEPTransportContext, OperationOutcomeRequest, OperationOutcomeResponse,
+	VaultRef, VaultGap, VAULT_GAP_REASONS, vault_ref_from_pointer)
 from .client import (
 	ApprovalNotFoundError,
 	ApprovalTerminalError,
@@ -16,6 +19,8 @@ from .client import (
 	GovernanceConfigurationError,
 	InvalidAuthorizationInputError,
 	InvalidEvaluationRequestError,
+	OperationOutcomeRejectedError,
+	DecisionResult,
 	OperationConflictError,
 	OperationStatusAccessError,
 	OperationNotFoundError,
@@ -38,6 +43,16 @@ from .metadata import (
 from .webhook import ApprovalWebhookEvent, WebhookDispatchResult, WebhookVerificationError, dispatch_approval_webhook, verify_approval_webhook
 
 __all__ = [
+ "GuardOptions",
+ "GuardResult",
+ "GuardVault",
+ "VaultWriteError",
+ "VaultRef",
+ "VaultGap",
+ "VAULT_GAP_REASONS",
+ "vault_ref_from_pointer",
+	"EvaluateAsset", "EvaluateRequest", "DefinitionObservation", "PEPTransportContext", "OperationOutcomeRequest",
+	"OperationOutcomeResponse", "OperationOutcomeRejectedError", "DecisionResult",
 	"GovernanceClient",
 	"EvaluationOutcomeError",
 	"AuthorizationDeniedError",

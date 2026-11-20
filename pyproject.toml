@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openprodkt-governance-sdk"
-version = "0.8.0"
+version = "0.9.0"
 description = "Python SDK for OpenProdkt Governance Control Plane"
 readme = "README.md"
 license = "Apache-2.0"
@@ -29,6 +29,7 @@ Repository = "https://github.com/OpenProdkt/governance-sdk-python"
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.115,<1", "httpx>=0.27"]
 grpc = ["grpcio>=1.62,<2"]
+vault = ["cryptography>=42"]
 
 [tool.setuptools.packages.find]
 where = ["."]

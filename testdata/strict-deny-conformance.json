@@ -1,0 +1,60 @@
+{
+  "schema_version": "v1",
+  "description": "Strict enforcement mode denies. A PEP must treat each case as the expected verdict, never as an allow, and never as a PDP outage unless pdp_unavailable is true. Unknown future reasons are still denies.",
+  "cases": [
+    {
+      "name": "default_deny_no_match",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "default_deny_no_match", "decisionId": "dec_strict_1"},
+      "expected": {"decision": "deny", "reason": "default_deny_no_match", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "default_deny_unregistered",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "default_deny_unregistered"},
+      "expected": {"decision": "deny", "reason": "default_deny_unregistered", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "unknown_future_reason",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "default_deny_future_reason", "decisionId": "dec_strict_2"},
+      "expected": {"decision": "deny", "reason": "default_deny_future_reason", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "kill_switch_active",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "kill_switch_active", "decisionId": "dec_strict_3"},
+      "expected": {"decision": "deny", "reason": "kill_switch_active", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "kill_switch_active_unregistered",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "kill_switch_active"},
+      "expected": {"decision": "deny", "reason": "kill_switch_active", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "definition_changed",
+      "http_status": 403,
+      "body": {"decision": "deny", "reason": "definition_changed", "decisionId": "dec_strict_4"},
+      "expected": {"decision": "deny", "reason": "definition_changed", "allowed": false, "pdp_unavailable": false}
+    },
+    {
+      "name": "enforcement_unavailable_503",
+      "http_status": 503,
+      "body": {"code": "enforcement_unavailable", "error": "enforcement unavailable"},
+      "expected": {"decision": "deny", "reason": "pdp_unavailable", "allowed": false, "pdp_unavailable": true}
+    },
+    {
+      "name": "pdp_unavailable_503",
+      "http_status": 503,
+      "body": {},
+      "expected": {"decision": "deny", "reason": "pdp_unavailable", "allowed": false, "pdp_unavailable": true}
+    },
+    {
+      "name": "pdp_unavailable_500",
+      "http_status": 500,
+      "body": {},
+      "expected": {"decision": "deny", "reason": "pdp_unavailable", "allowed": false, "pdp_unavailable": true}
+    }
+  ]
+}

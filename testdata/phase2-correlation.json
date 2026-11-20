@@ -1,0 +1,404 @@
+{
+  "profile": "opk.phase2-correlation/1",
+  "traceparent": [
+    {
+      "name": "missing",
+      "headers": [],
+      "valid": false
+    },
+    {
+      "name": "valid-v00",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": true,
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "parent_span_id": "00f067aa0ba902b7",
+      "flags": "01"
+    },
+    {
+      "name": "duplicate-lines",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "comma-joined",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01,00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "zero-trace",
+      "headers": [
+        "00-00000000000000000000000000000000-00f067aa0ba902b7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "zero-span",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "uppercase",
+      "headers": [
+        "00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "version-ff",
+      "headers": [
+        "ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "v00-extra",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra"
+      ],
+      "valid": false
+    },
+    {
+      "name": "future-prefix",
+      "headers": [
+        "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": true,
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "parent_span_id": "00f067aa0ba902b7",
+      "flags": "01"
+    },
+    {
+      "name": "future-extension",
+      "headers": [
+        "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra"
+      ],
+      "valid": true,
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "parent_span_id": "00f067aa0ba902b7",
+      "flags": "01"
+    },
+    {
+      "name": "future-empty-extension",
+      "headers": [
+        "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-"
+      ],
+      "valid": false
+    },
+    {
+      "name": "bad-separators",
+      "headers": [
+        "00:4bf92f3577b34da6a3ce929d0e0e4736:00f067aa0ba902b7:01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "bad-flags",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-gg"
+      ],
+      "valid": false
+    },
+    {
+      "name": "crlf",
+      "headers": [
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\r\n"
+      ],
+      "valid": false
+    },
+    {
+      "name": "surrounding-space",
+      "headers": [
+        " 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      ],
+      "valid": false
+    },
+    {
+      "name": "oversized",
+      "headers": [
+        "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "valid": false
+    }
+  ],
+  "outcome_fields": [
+    {
+      "name": "legacy",
+      "fields_json": "{}",
+      "valid": true
+    },
+    {
+      "name": "execution-only",
+      "fields_json": "{\"execution_id\": \"0196f111-1234-7123-8123-123456789abc\"}",
+      "valid": true
+    },
+    {
+      "name": "attempt-only",
+      "fields_json": "{\"attempt\":1}",
+      "valid": true
+    },
+    {
+      "name": "attempt-max",
+      "fields_json": "{\"attempt\":2147483647}",
+      "valid": true
+    },
+    {
+      "name": "upstream-only",
+      "fields_json": "{\"upstream_request_id\": \"aws_req:123.A-b_4\"}",
+      "valid": true
+    },
+    {
+      "name": "all",
+      "fields_json": "{\"execution_id\": \"0196f111-1234-7123-8123-123456789abc\", \"attempt\": 2, \"upstream_request_id\": \"req-2\"}",
+      "valid": true
+    },
+    {
+      "name": "attempt-zero",
+      "fields_json": "{\"attempt\":0}",
+      "valid": false
+    },
+    {
+      "name": "attempt-negative",
+      "fields_json": "{\"attempt\":-1}",
+      "valid": false
+    },
+    {
+      "name": "attempt-fraction",
+      "fields_json": "{\"attempt\":1.5}",
+      "valid": false
+    },
+    {
+      "name": "attempt-decimal",
+      "fields_json": "{\"attempt\":1.0}",
+      "valid": false
+    },
+    {
+      "name": "attempt-exponent",
+      "fields_json": "{\"attempt\":1e0}",
+      "valid": false
+    },
+    {
+      "name": "attempt-overflow",
+      "fields_json": "{\"attempt\":2147483648}",
+      "valid": false
+    },
+    {
+      "name": "attempt-unsafe",
+      "fields_json": "{\"attempt\":9007199254740993}",
+      "valid": false
+    },
+    {
+      "name": "attempt-string",
+      "fields_json": "{\"attempt\":\"1\"}",
+      "valid": false
+    },
+    {
+      "name": "attempt-bool",
+      "fields_json": "{\"attempt\":true}",
+      "valid": false
+    },
+    {
+      "name": "uuid-v4",
+      "fields_json": "{\"execution_id\": \"0196f111-1234-4123-8123-123456789abc\"}",
+      "valid": false
+    },
+    {
+      "name": "uuid-variant",
+      "fields_json": "{\"execution_id\": \"0196f111-1234-7123-7123-123456789abc\"}",
+      "valid": false
+    },
+    {
+      "name": "uuid-uppercase",
+      "fields_json": "{\"execution_id\": \"0196F111-1234-7123-8123-123456789ABC\"}",
+      "valid": false
+    },
+    {
+      "name": "uuid-empty",
+      "fields_json": "{\"execution_id\":\"\"}",
+      "valid": false
+    },
+    {
+      "name": "upstream-empty",
+      "fields_json": "{\"upstream_request_id\":\"\"}",
+      "valid": false
+    },
+    {
+      "name": "upstream-128",
+      "fields_json": "{\"upstream_request_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+      "valid": true
+    },
+    {
+      "name": "upstream-129",
+      "fields_json": "{\"upstream_request_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+      "valid": false
+    },
+    {
+      "name": "upstream-crlf",
+      "fields_json": "{\"upstream_request_id\": \"a\\r\\nb\"}",
+      "valid": false
+    },
+    {
+      "name": "upstream-unicode",
+      "fields_json": "{\"upstream_request_id\": \"\\u0105\"}",
+      "valid": false
+    },
+    {
+      "name": "execution_id-null",
+      "fields_json": "{\"execution_id\": null}",
+      "valid": false
+    },
+    {
+      "name": "attempt-null",
+      "fields_json": "{\"attempt\": null}",
+      "valid": false
+    },
+    {
+      "name": "upstream_request_id-null",
+      "fields_json": "{\"upstream_request_id\": null}",
+      "valid": false
+    }
+  ],
+  "sdk_requests": [
+    {
+      "name": "legacy",
+      "outcome_fields": {}
+    },
+    {
+      "name": "execution-only",
+      "outcome_fields": {
+        "execution_id": "0196f111-1234-7123-8123-123456789abc"
+      }
+    },
+    {
+      "name": "attempt-only",
+      "outcome_fields": {
+        "attempt": 1
+      }
+    },
+    {
+      "name": "upstream-only",
+      "outcome_fields": {
+        "upstream_request_id": "aws_req:123.A-b_4"
+      }
+    },
+    {
+      "name": "all",
+      "outcome_fields": {
+        "execution_id": "0196f111-1234-7123-8123-123456789abc",
+        "attempt": 2147483647,
+        "upstream_request_id": "req-2"
+      }
+    }
+  ],
+  "sdk_forbidden_transports": [
+    {
+      "name": "raw-arguments",
+      "transport": {
+        "kind": "mcp",
+        "mcp": {
+          "tool": "refund",
+          "arguments": {
+            "private": "raw-secret"
+          }
+        }
+      }
+    },
+    {
+      "name": "http-authorization",
+      "transport": {
+        "kind": "http",
+        "http": {
+          "headers": {
+            "Authorization": "Bearer secret"
+          }
+        }
+      }
+    },
+    {
+      "name": "grpc-authorization",
+      "transport": {
+        "kind": "grpc",
+        "grpc": {
+          "metadata": {
+            "AUTHORIZATION": "Bearer secret"
+          }
+        }
+      }
+    },
+    {
+      "name": "http-cookie",
+      "transport": {
+        "kind": "http",
+        "http": {
+          "headers": {
+            "cookie": "session=secret"
+          }
+        }
+      }
+    }
+  ],
+  "mcp_trace": [
+    {
+      "name": "alias",
+      "meta": {
+        "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      },
+      "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      "valid": true
+    },
+    {
+      "name": "namespaced",
+      "meta": {
+        "openprodkt": {
+          "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        }
+      },
+      "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      "valid": true
+    },
+    {
+      "name": "identical-aliases",
+      "meta": {
+        "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+        "openprodkt": {
+          "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        }
+      },
+      "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      "valid": true
+    },
+    {
+      "name": "invalid-ignored",
+      "meta": {
+        "traceparent": "invalid"
+      },
+      "traceparent": "",
+      "valid": true
+    },
+    {
+      "name": "wrong-type",
+      "meta": {
+        "traceparent": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "conflicting-aliases",
+      "meta": {
+        "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+        "openprodkt": {
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-00"
+        }
+      },
+      "valid": false
+    }
+  ]
+}

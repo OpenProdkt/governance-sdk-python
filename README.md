@@ -29,6 +29,10 @@ The Python client exposes the same current surface as the Go and TypeScript SDKs
 - Resources: `list_assets`, `create_asset`, `update_asset`, `delete_asset`, `ingest_asset_discovery`, `list_asset_discoveries`, `delete_asset_discovery`, `list_groups`, `create_group`, `update_group`, `delete_group`, `list_policies`, `create_policy`, `delete_policy`
 - Operations: `list_api_keys`, `create_api_key`, `rotate_api_key`, `revoke_api_key`, `list_approvals`, `reject_approval` (requires a user JWT), `upload_entitlement_artifact`
 
+### Definition observation (optional)
+
+`authorize(..., definition_observation=...)` and the `definition_observation` member of an `EvaluateRequest` carry optional, untrusted evidence of the called MCP tool's definition: `{"digest": "sha256:<64 lowercase hex>", "canon": "mcp-tool-definition:v1", "server_version": "<optional>"}`. `server_version` is optional (1 to 128 characters, no control characters) and the encoded object is at most 512 bytes. The SDK sends the digest only (never a description or schema), omits the field when it is unset, never computes a digest, and raises `InvalidAuthorizationInputError` for a malformed value before any request is sent. Because the caller supplies it, the observation is evidence, not proof.
+
 ## Usage
 
 ```python
@@ -90,3 +94,60 @@ server = grpc.server(
 ```
 
 Framework adapters may pass `PrincipalContext` with the bearer credential they have already validated for the request. It is sent only in the `Authorization` header, never in evaluation metadata or JSON.
+
+## Vault envelopes (optional)
+
+`openprodkt_governance.vault` seals a JSON record into an encrypted envelope (`opk-vault.v1`, AES-256-GCM) and can write it to object storage that you own. It runs entirely in your process and makes no network calls of its own: you supply the key service (`KeyBackend`) and the object store (`ObjectWriter`).
+
+```bash
+pip install "openprodkt-governance-sdk[vault]"
+```
+
+The `cryptography` package is imported only when you seal, open, or create a `MemoryBackend`; `import openprodkt_governance` and `import openprodkt_governance.vault` work without it.
+
+```python
+from datetime import timedelta
+from openprodkt_governance.vault import (
+	MemoryBackend, MemoryObjectWriter, VaultWriter, VaultWriterConfig, open_envelope, seal,
+)
+
+backend = MemoryBackend()  # tests only; use your own KeyBackend for a real key service
+envelope = seal(backend, "alias/my-key", "input", "org_1", "op-1", {"tool": "pay", "amount": 12})
+header, record = open_envelope(backend, envelope)  # record: canonical JSON bytes
+
+writer = VaultWriter(VaultWriterConfig(
+	backend=backend, objects=MemoryObjectWriter(), key_ref="alias/my-key",
+	retention_mode="GOVERNANCE", retention_period=timedelta(days=30),
+))
+pointer = writer.write("input", "org_1", "op-1", 1, {"tool": "pay"})  # no record content or key material
+```
+
+- Each seal uses a fresh data key from your key service and a fresh 12-byte nonce. Destroying the key in your key service makes the stored ciphertext unreadable.
+- A record is a JSON object of at most 8 MiB, given as a mapping or JSON text. Numbers must be integers within ±(2^53−1); integral spellings such as `1.0` and `1e2` are written as integers, and fractions, `NaN` and `Infinity` are refused. The record is stored as RFC 8785 canonical JSON.
+- Errors are fixed text and never contain record content, keys, or wrapped keys. An envelope that cannot be opened raises `EnvelopeError`; a failing key service raises `KeyBackendError` (`KeyDestroyedError`, `KeyNotFoundError` and `InvalidWrappedKeyError` are also `KeyBackendError` when the key service reports them).
+- `MemoryBackend` and `MemoryObjectWriter` keep everything in process memory for tests. This package does not replace access control on your key service or storage; the protection of stored records depends on how you manage those keys and that storage.
+## Vault evidence
+
+Pass `vault=` to `client.guard` to store records you supply, in your own storage, and send only a pointer to each stored record. Without it nothing changes.
+
+```python
+result = client.guard(
+    request, callback, principal_context=principal,
+    vault={
+        "writer": writer,                        # a VaultWriter, or any object with the same write method
+        "organization_id": "org_1",
+        "input": {"v": 1, "text": prompt_text},  # stored before the evaluation
+        "output": lambda value: {"v": 1, "text": value.text},  # optional; stored after the call returned
+        "continue_without_vault": False,         # default
+    },
+)
+```
+
+- The input record is written first and its pointer is sent as `vault_ref` on the evaluation request. The output record is written only after the callback returned normally, and its pointer is sent as `vault_ref` on the outcome report. Returning `None` from `output` skips the output write. Records are never sent to the service.
+- By default the guard fails closed: if the input write fails it raises `VaultWriteError` and neither evaluates nor calls your callback. `VaultWriteError.reason` is one of `key_service_unavailable`, `storage_unavailable`, `record_too_large`, `write_failed`; the message carries no other detail. With `continue_without_vault` set to `True` the guard continues and sends `vault_gap` with that reason instead of a pointer.
+- If the output write fails, the call has already run: its result is returned unchanged and the real outcome is reported with `vault_gap` and no pointer. This holds in both modes. A raising `output` function is reported the same way (`write_failed`).
+- If the callback raises, the outcome is `unknown` as before and no output record is written.
+- Without `output`, the guard still never reads, hashes, logs or sends the callback result. When you supply `output`, you choose to hand the result to your vault writer.
+- Records must fit the vault profile: fractional numbers are refused, so carry them as strings (for example `{"ratio": "0.25"}`).
+- `evaluate_proxy` and `report_operation_outcome` also accept an optional `vault_ref` (kind `input` on evaluation, `output` on outcomes) or `vault_gap`, never both. `vault_ref_from_pointer(pointer)` builds the pointer from a `VaultWriter` result. An invalid combination raises `InvalidAuthorizationInputError` before any request is sent.
+- The service may ignore these members, and the guard does not check what the service does with them.

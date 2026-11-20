@@ -20,7 +20,7 @@ Run all commands from the repository root unless noted otherwise.
 
 ## Install the app and SDK
 
-The SDK version used by this example is `0.8.0`. Until publication is verified, install it from this checkout for local development, then install the example:
+The SDK version used by this example is the verified `0.9.0` release. For local development, install it from this checkout, then install the example:
 
 ```bash
 python3 -m venv examples/python-decision-point/.venv
@@ -29,7 +29,7 @@ examples/python-decision-point/.venv/bin/python -m pip install -e 'examples/pyth
 examples/python-decision-point/.venv/bin/python -m pytest examples/python-decision-point/tests
 ```
 
-The `sdk/python` path above is repo-relative and only valid inside this repository. In the public SDK mirror, the example pins `openprodkt-governance-sdk[grpc]==0.8.0`; use that pin only after artifact publication is verified.
+The `sdk/python` path above is repo-relative and only valid inside this repository. In the public SDK mirror, the example pins `openprodkt-governance-sdk[grpc]==0.9.0`. Satisfy that dependency using the [verified GitHub release wheel](https://github.com/OpenProdkt/governance-sdk-python/releases/download/v0.9.0/openprodkt_governance_sdk-0.9.0-py3-none-any.whl) with the `grpc` extra before installing the example; this is not a claim of PyPI publication.
 
 The application keeps refund state in memory. Restarting it clears all sample records.
 

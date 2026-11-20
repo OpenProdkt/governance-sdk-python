@@ -1,0 +1,158 @@
+{
+  "profile": "mcp-tool-definition:v1",
+  "description": "Digest = 'sha256:' + lowercase hex SHA-256 over the bytes of 'openprodkt:mcp-tool-definition:v1:' followed by the RFC 8785 (JCS) canonical JSON of the object {name, description, inputSchema, server_version}. description and server_version are omitted when absent; name and inputSchema are required. UTF-8, no Unicode normalization. Numbers use the exact safe-integer profile (integers within +/-(2^53-1), integral spellings such as 1.0 or 1e2 normalized exactly); any other number makes the expected result 'omit' (no observation, never an approximation). The Go PEP, and the Python and TypeScript references in the SDK test suites, all verify these expected values; the Python and TypeScript references are independent of the Go implementation.",
+  "prefix": "openprodkt:mcp-tool-definition:v1:",
+  "vectors": [
+    {
+      "id": "simple",
+      "name": "echo",
+      "description": "Echo the text back.",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.0",
+      "expected": "sha256:89f116ccd0d22518197d12e83a5cf8aa8f295b8e959b474c9ca23df66f1a100f"
+    },
+    {
+      "id": "key-order-independence",
+      "name": "echo",
+      "description": "Echo the text back.",
+      "inputSchema": {"required": ["text"], "properties": {"text": {"type": "string"}}, "type": "object"},
+      "server_version": "1.0.0",
+      "expected": "sha256:89f116ccd0d22518197d12e83a5cf8aa8f295b8e959b474c9ca23df66f1a100f"
+    },
+    {
+      "id": "absent-description",
+      "name": "echo",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.0",
+      "expected": "sha256:c3672d301de550563a3c3d20af737cdce732c8f6e469d3710afd96ff8c90e21a"
+    },
+    {
+      "id": "empty-description-differs-from-absent",
+      "name": "echo",
+      "description": "",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.0",
+      "expected": "sha256:ef0df9a9cc731f68d9cd506faba78124e066d61fdc0edc1070662a545cc67a22"
+    },
+    {
+      "id": "absent-server-version",
+      "name": "echo",
+      "description": "Echo the text back.",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "expected": "sha256:753c1ec26c55ebeb2028112b9822107061ecca13e9fb247f0002f11f74fa52cf"
+    },
+    {
+      "id": "absent-description-and-server-version",
+      "name": "echo",
+      "inputSchema": {"type": "object"},
+      "expected": "sha256:df21f37eb4088be11c13d3db62ac6970bff71ae57d7143b52193ba3eb7f23c66"
+    },
+    {
+      "id": "changed-description",
+      "name": "echo",
+      "description": "Echo the text back, then email it to someone.",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.0",
+      "expected": "sha256:effbf703358d45d4969626db64c60fadc9738c5cf9c9905c00ba5e7ee2db2529"
+    },
+    {
+      "id": "changed-schema",
+      "name": "echo",
+      "description": "Echo the text back.",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "to": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.0",
+      "expected": "sha256:836b18d5a7e63442dca5c9de743a30b6a95dfb3235412591f79c0ca15955f0ab"
+    },
+    {
+      "id": "changed-server-version",
+      "name": "echo",
+      "description": "Echo the text back.",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "server_version": "1.0.1",
+      "expected": "sha256:015048c8689d2ec4e4d3ddf4b701a60bd4d6c4b6ea43ca4f1aa13266706ae8c4"
+    },
+    {
+      "id": "unicode-composed",
+      "name": "caf\u00e9",
+      "description": "Caf\u00e9 menu: \u00e9",
+      "inputSchema": {"type": "object"},
+      "expected": "sha256:b6859056156df33d09e8f5661c13a78ce541f64ae87fe5c4a337535fe0c5b77b"
+    },
+    {
+      "id": "unicode-decomposed-differs-from-composed",
+      "name": "cafe\u0301",
+      "description": "Cafe\u0301 menu: e\u0301",
+      "inputSchema": {"type": "object"},
+      "expected": "sha256:8e6777b79f04a7c60fa5a0f1cd67998077bd69ed7cc77ba8f5b86ab9cdbcc621"
+    },
+    {
+      "id": "unicode-non-bmp-key-order",
+      "name": "emoji",
+      "description": "Keys sort by UTF-16 code unit, not by code point.",
+      "inputSchema": {"type": "object", "properties": {"\uffff": {"type": "string"}, "\ud83d\ude00": {"type": "string"}, "\u00e9": {"type": "string"}, "z": {"type": "string"}}},
+      "server_version": "\u00fcber-2",
+      "expected": "sha256:8c4b9938a4a400ede552bc7fc48e25db1a1d44c0be792003f4e9eaf04bf251ef"
+    },
+    {
+      "id": "string-escaping",
+      "name": "escape",
+      "description": "quote \" backslash \\ slash / angle <> amp & tab \t newline \n nul \u0000 unit-sep \u001f del \u007f line-sep \u2028",
+      "inputSchema": {"type": "object", "properties": {"a\"b": {"type": "string", "description": "<tag> & \\ \u0008\u000c\r"}}},
+      "expected": "sha256:84f9a9f851e3fa3f963a3e741d3b59cd92fd5de349362b64037ee671b795142a"
+    },
+    {
+      "id": "nested-schema",
+      "name": "create_invoice",
+      "description": "Create an invoice.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "amount": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "currency": {"type": "string", "enum": ["EUR", "USD", "PLN"], "default": null},
+          "lines": {"type": "array", "items": {"type": "object", "properties": {"sku": {"type": "string"}, "qty": {"type": "integer", "minimum": 1}}, "required": ["sku", "qty"]}},
+          "flags": {"type": "object", "properties": {"draft": {"type": "boolean", "default": true}}}
+        },
+        "required": ["amount", "currency"]
+      },
+      "server_version": "2.4.1",
+      "expected": "sha256:2fcdcfe1a4c9ea78345e753ee56d1dd8274c84c2945809019322562825661363"
+    },
+    {
+      "id": "integer-numbers",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"a": {"minimum": 0, "maximum": 100}, "b": {"default": -1}, "c": {"default": 9007199254740991}, "d": {"default": -9007199254740991}, "e": {"default": 1.0}, "f": {"default": 1e2}, "g": {"default": -0}, "h": {"default": 12E1}, "i": {"default": 1.5e1}}},
+      "expected": "sha256:8b366164d1d617d83f80c90a2ef681d7f339822fcd620064519c65182774a013"
+    },
+    {
+      "id": "integer-numbers-canonical-spelling",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"a": {"minimum": 0, "maximum": 100}, "b": {"default": -1}, "c": {"default": 9007199254740991}, "d": {"default": -9007199254740991}, "e": {"default": 1}, "f": {"default": 100}, "g": {"default": 0}, "h": {"default": 120}, "i": {"default": 15}}},
+      "expected": "sha256:8b366164d1d617d83f80c90a2ef681d7f339822fcd620064519c65182774a013"
+    },
+    {
+      "id": "unsupported-fraction",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"ratio": {"type": "number", "minimum": 0.5}}},
+      "expected": "omit"
+    },
+    {
+      "id": "unsupported-unsafe-integer",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"id": {"default": 9007199254740993}}},
+      "expected": "omit"
+    },
+    {
+      "id": "unsupported-huge-exponent",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"big": {"maximum": 1e400}}},
+      "expected": "omit"
+    },
+    {
+      "id": "unsupported-negative-fraction-exponent",
+      "name": "numbers",
+      "inputSchema": {"type": "object", "properties": {"tiny": {"minimum": 1e-3}}},
+      "expected": "omit"
+    }
+  ]
+}
